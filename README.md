@@ -1,4 +1,4 @@
-# perfect_soggy_egg
+# The Perfect Soggy Egg
 ### **How to get the perfect egg with the eggyolk soggy and eggwhite sturdy?**
 
 Solution:
