@@ -1,0 +1,17 @@
+skillname: "Soggy egg timer"
+author: "Tjalling"
+description: "Provides a timer for cooking the perfect soggy egg."
+intents:
+  time_soggy_egg: 
+    - 'How long do I cook an egg of {weight} (gram|grams|gr|g)?'
+    - 'My egg is {weight} (gram|grams|gr|g). How (many minutes|long) {should|do} I cook it?'
+    - "How long to cook an egg that weighs {weight}?"
+    - "How long to cook a {weight} (gram|grams|gr|g) egg?"
+    - "How long should I cook a {weight} (g|gram|gr|grams) egg?"
+    - "How long do I cook a {weight} (g|gram|gr|grams) egg?"
+  rate_soggy_egg: 
+    - 'The egg was a {rating}'
+    - 'The egg was a {rating}. Great, thank you!'
+    - 'I rate the egg a {rating}.'
+    - 'I give the egg a {rating}'
+    - 'I give the egg a rating of {rating}'

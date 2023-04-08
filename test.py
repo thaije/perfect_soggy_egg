@@ -12,9 +12,9 @@ eggs = pd.read_csv(f, sep=",")
 
 # prepare axes for the plot 
 fig, ax1 = plt.subplots()
-ax1.set_xlabel('Kook duur (seconden)')
-ax1.set_ylabel('Gewicht ei (gram)')
-ax1.set_title('Het perfecte ei')
+ax1.set_xlabel('Cooking duration (seconds)')
+ax1.set_ylabel('Egg weight (gram)')
+ax1.set_title('The perfect soggy egg')
 
 # get colours 
 c = eggs.rating
@@ -24,7 +24,7 @@ plt.scatter( eggs['cook_seconds'], eggs['weight_gr'] , c=c, cmap = 'RdYlGn', s=7
 ax1.set_ylim((40, 75))
 ax1.set_xlim((300, 480))
 cbar = plt.colorbar()
-cbar.set_label('Hoe goed was het ei?')
+cbar.set_label('How great was the egg?')
 
 
 # get the perfect stuff 
