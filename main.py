@@ -4,22 +4,35 @@ import os
 import pandas as pd
 import random 
 
+data_path = os.environ.get('DATA_STORAGE_PATH')
+
 class SoggyEggTimerSkill(SkillBase):
     def __init__(self) -> None:
         super().__init__()
-        self.data_file = os.path.join(os.path.dirname(
-            os.path.abspath(__file__)), "egg_data.csv")
+        print(f"Created {self.__class__.__name__} skill")
+
+        baseline_data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "egg_data.csv")
+
+        # preferably we use the file stored in the volume, but if it doesn't exist, we copy the baseline data file to the volume
+        self.data_file = os.path.join(data_path, "egg_data.csv")
+        
+        # check if self.data_file exists
+        if not os.path.exists(data_path):
+            print(f"{self.__class__.__name__} data file doesn't exist, copying baseline data to it")
+            # create a file called egg_data.csv in path and copy the baseline data to it
+            os.makedirs(data_path)
+            self.egg_data = pd.read_csv(baseline_data_file, sep=",")
+            self.egg_data.to_csv(self.data_file, index=False, sep=",")
+
         self.egg_data = pd.read_csv(self.data_file, sep=",")
+
         self.trained_model = None
         self.last_weight = None
         self.last_predicted_time = None
         self.last_predicted_time_pretty = None
         self.__train_model()
 
-
-    def initialize(self):
-        print(f"Initializing {self.__class__.__name__} skill")
-
+        print(f"Initialized {self.__class__.__name__} skill")
 
     def msg_callback(self, msg):
         """ This function will be called for every message that matches the intent specified in the config.yaml of this skill """
@@ -87,7 +100,7 @@ class SoggyEggTimerSkill(SkillBase):
         if self.trained_model is None:
             self.__train_model()
 
-        time = self.trained_model.predict([[weight]])[0]
+        time = int(self.trained_model.predict([[weight]])[0])
         self.last_predicted_time = time
 
         # convert seconds to entire minutes and the rest as seconds
