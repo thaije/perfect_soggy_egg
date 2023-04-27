@@ -10,8 +10,7 @@ intents:
     - "How long should I cook a {weight} (g|gram|gr|grams) egg?"
     - "How long do I cook a {weight} (g|gram|gr|grams) egg?"
   rate_soggy_egg: 
-    - 'The egg was a {rating}'
-    - 'The egg was a {rating}. Great, thank you!'
-    - 'I rate the egg a {rating}.'
-    - 'I give the egg a {rating}'
-    - 'I give the egg a rating of {rating}'
+    - 'The egg was (a|an) {rating}'
+    - 'The egg was (a|an) {rating}. Great, thank you!'
+    - 'I (give|rate) the egg (a|an) {rating}'
+    - 'I give the egg (a|an) rating of {rating}'

@@ -3,6 +3,9 @@ from sklearn import linear_model
 import os
 import pandas as pd
 import random 
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import MinMaxScaler
+from datetime import datetime
 
 data_path = os.environ.get('DATA_STORAGE_PATH')
 
@@ -11,6 +14,74 @@ class SoggyEggTimerSkill(SkillBase):
         super().__init__()
         print(f"Created {self.__class__.__name__} skill")
 
+        random.seed(int(datetime.now().timestamp()))
+
+        self.trained_model = None
+        self.last_weight = None
+        self.last_predicted_time = None
+        self.last_predicted_time_pretty = None
+        self.last_msg = None 
+        self.__train_model()
+        # self.__plot()
+        
+        # print("Time for an egg of 61 gr:", self.__calc_datapoint(61), "seconds")
+
+
+        print(f"Initialized {self.__class__.__name__} skill")
+
+
+    def __calc_datapoint(self, x):
+        x = self.weight_scaler.transform([[x]])[0][0]
+        y = self.trained_model.predict([[x, 1]])[0]
+        y = self.cooktime_scaler.inverse_transform([[y]])[0][0]
+        return y
+
+    def msg_callback(self, msg):
+        """ This function will be called for every message that matches the intent specified in the config.yaml of this skill """
+        print(f"{self.__class__.__name__} skill received message:", msg)
+
+        self.last_msg = msg 
+
+        # query the cooking time for a soggy egg
+        if msg.intent == "time_soggy_egg":
+            if "weight" not in msg.matches:
+                self.output_message(
+                    text="I'm sorry, I didn't understand how much your egg weighs. Could you try again?", reply_to=self.last_msg)
+                return
+            else:
+                weight = msg.matches["weight"]
+                try:
+                    weight = int(weight)
+                except:
+                    self.output_message(
+                        text="I'm sorry, I didn't understand how much your egg weighs. Could you try again?", reply_to=self.last_msg)
+                    return
+                self.__calc_egg_time(weight)
+
+        # rate the soggy egg 
+        elif msg.intent == "rate_soggy_egg":
+            if self.last_weight is None or self.last_predicted_time is None:
+                self.output_message(
+                    text="I'm sorry, I don't know what egg you are talking about! Please ask me first on how long to cook your egg.", reply_to=self.last_msg)
+                return
+            if "rating" not in msg.matches:
+                self.output_message(
+                    text="I'm sorry, I didn't understand how you liked your egg. Could you give it a number between 0 and 10?", reply_to=self.last_msg)
+                return
+            else:
+                rating = msg.matches["rating"]
+                try:
+                    rating = int(rating)
+                    assert rating < 11 and rating > -1
+                except:
+                    self.output_message(
+                        text="I'm sorry, I didn't understand how you liked your egg. Could you give it a number between 0 and 10?", reply_to=self.last_msg)
+                    return
+                self.__add_data(self.last_weight, self.last_predicted_time, rating)
+                self.last_weight = None 
+                self.last_predicted_time = None 
+    
+    def __load_datafile(self):
         baseline_data_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "egg_data.csv")
 
         # preferably we use the file stored in the volume, but if it doesn't exist, we copy the baseline data file to the volume
@@ -23,84 +94,68 @@ class SoggyEggTimerSkill(SkillBase):
             os.makedirs(data_path)
             self.egg_data = pd.read_csv(baseline_data_file, sep=",")
             self.egg_data.to_csv(self.data_file, index=False, sep=",")
+        else:
+            print("Found pre-existing egg_data.csv data file")
 
         self.egg_data = pd.read_csv(self.data_file, sep=",")
 
-        self.trained_model = None
-        self.last_weight = None
-        self.last_predicted_time = None
-        self.last_predicted_time_pretty = None
-        self.__train_model()
 
-        print(f"Initialized {self.__class__.__name__} skill")
+    def __normalize_data(self):
+        """ Normalize the data in the egg_data.csv file """
+                
+        # normalize rating from 0-10 to 0-1
+        self.egg_data['rating_normalized'] = self.egg_data['rating'] / 10
 
-    def msg_callback(self, msg):
-        """ This function will be called for every message that matches the intent specified in the config.yaml of this skill """
-        print(f"{self.__class__.__name__} skill received message:", msg)
+        # normalize the weight feature
+        self.weight_scaler = MinMaxScaler()
+        wgr = [[x] for x in self.egg_data['weight_gr'].to_list()]
+        self.weight_scaler.fit(wgr)
+        self.egg_data['weight_gr_normalized'] = self.weight_scaler.transform(wgr)
 
-        # query the cooking time for a soggy egg
-        if msg.intent == "time_soggy_egg":
-            if "weight" not in msg.matches:
-                self.output_message(
-                    "I'm sorry, I didn't understand how much your egg weighs. Could you try again?")
-                return
-            else:
-                weight = msg.matches["weight"]
-                try:
-                    weight = int(weight)
-                except:
-                    self.output_message(
-                        "I'm sorry, I didn't understand how much your egg weighs. Could you try again?")
-                    return
-                self.__calc_egg_time(weight)
-
-        # rate the soggy egg 
-        elif msg.intent == "rate_soggy_egg":
-            if self.last_weight is None or self.last_predicted_time is None:
-                self.output_message(
-                    "I'm sorry, I don't know how long your egg was cooked. Could you try again?")
-                return
-            if "rating" not in msg.matches:
-                self.output_message(
-                    "I'm sorry, I didn't understand how you liked your egg. Could you give it a number between 0 and 10?")
-                return
-            else:
-                rating = msg.matches["rating"]
-                try:
-                    rating = int(rating)
-                    assert rating < 11 and rating > -1
-                except:
-                    self.output_message(
-                        "I'm sorry, I didn't understand how you liked your egg. Could you give it a number between 0 and 10?")
-                    return
-                self.__add_data(self.last_weight, self.last_predicted_time, rating)
-
+        # normalize the cook seconds feature
+        self.cooktime_scaler = MinMaxScaler()
+        cs = [[x] for x in self.egg_data['cook_seconds'].to_list()]
+        self.cooktime_scaler.fit(cs)
+        self.egg_data['cook_seconds_normalized'] = self.cooktime_scaler.transform(cs)
+        
+    
 
     def __train_model(self):
-        # get the perfect stuff
-        best_eggs = self.egg_data[self.egg_data['rating'] > 8]
-        best_eggs = best_eggs.reset_index()
 
-        # make a trainingset of the best eggs
-        y = []
-        x = []
-        weights = best_eggs['rating'].to_list()
-        for i in range(best_eggs.shape[0]):
-            y.append([best_eggs.loc[i, :]['weight_gr']])
-            x.append(best_eggs.loc[i, :]['cook_seconds'])
+        self.__load_datafile()
+        self.__normalize_data()
+
+        # split the eggs dataframe into a training and test set
+        train = self.egg_data.sample(frac=0.8, random_state=200)
+        test = self.egg_data.drop(train.index)
+
+        print(test.head())
 
         # fit a linear function to it
         self.trained_model = linear_model.LinearRegression()
-        self.trained_model.fit(y, x, weights)
 
-        print("Trained soggy egg model")
+        # fit regr on two features: weight and rating, and predict the cooking time
+        self.trained_model.fit(train[['weight_gr_normalized', 'rating_normalized']], train['cook_seconds_normalized'])
+
+        real = test['cook_seconds_normalized'].to_list()
+        predicted = self.trained_model.predict(test[['weight_gr_normalized', 'rating_normalized']]).tolist()
+        mse = mean_squared_error(real, predicted)
+
+        print(f"Trained soggy egg model. Mean Squared Error of {len(real)} test datapoints: {mse}")
+        # print("Model coefficients:", self.trained_model.coef_)
 
 
     def __calc_egg_time(self, weight):
         if self.trained_model is None:
             self.__train_model()
 
-        time = int(self.trained_model.predict([[weight]])[0])
+        # normalize the weight
+        weight = [[weight]]
+        weight_normalized = self.weight_scaler.transform(weight)[0][0]
+
+        # predict the cooking time
+        time_normalized = self.trained_model.predict([[weight_normalized, 1]])[0]
+        time = self.cooktime_scaler.inverse_transform([[time_normalized]])[0][0]
         self.last_predicted_time = time
 
         # convert seconds to entire minutes and the rest as seconds
@@ -122,7 +177,7 @@ class SoggyEggTimerSkill(SkillBase):
 
         self.last_weight = weight 
 
-        self.output_message(msg)
+        self.output_message(text=msg, reply_to=self.last_msg)
 
 
     def __add_data(self, weight, time, rating):
@@ -130,7 +185,7 @@ class SoggyEggTimerSkill(SkillBase):
             rating = int(rating)
         except:
             self.output_message(
-                "I'm sorry, I didn't understand your rating. Could you give it a number between 0 and 10?")
+                text="I'm sorry, I didn't understand your rating. Could you give it a number between 0 and 10?", reply_to=self.last_msg)
             return
 
         # add the data to the pandas dataframe
@@ -142,8 +197,8 @@ class SoggyEggTimerSkill(SkillBase):
         self.egg_data = self.egg_data.drop_duplicates()
 
         # save the data to the csv file
-        # TODO: write this to a file in a Docker volume
         self.egg_data.to_csv(self.data_file, index=False, sep=",")
+        print("Wrote data to egg data file")
 
         # retrain the model
         self.__train_model()
@@ -167,8 +222,46 @@ class SoggyEggTimerSkill(SkillBase):
                 "Let's make this world a better place, one soggy egg at a time."
                 "I'm sorry you didn't like it. I will remember this for next time.",
                 "Oh no! I'm sorry you didn't like it. Hopefully I can make it better next time."])
-        self.output_message(msg)
+        self.output_message(text=msg, reply_to=self.last_msg)
 
+    def __plot(self):
+        import matplotlib.pyplot as plt
+
+        # prepare axes for the plot 
+        fig, ax1 = plt.subplots()
+        ax1.set_xlabel('Cooking duration (seconds)')
+        ax1.set_ylabel('Egg weight (gram)')
+        ax1.set_title('The perfect soggy egg')
+
+        c = self.egg_data.rating
+        plt.scatter( self.egg_data['cook_seconds'], self.egg_data['weight_gr'] , c=c, cmap = 'RdYlGn', s=70) 
+        # plot axes etc
+        ax1.set_ylim((40, 75))
+        ax1.set_xlim((300, 480))
+        cbar = plt.colorbar()
+        cbar.set_label('How great was the egg?')
+
+        # plot the learned linear function
+        test_y = [[item, 1] for item in list(range(40, 75, 5))]
+
+        # normalize for the linear regression model
+        test_y_normalized = []
+        for item in test_y:
+            print(item)
+            item_scaled = self.weight_scaler.transform([[item[0]]])[0][0]
+            test_y_normalized.append([item_scaled, item[1]])
+
+        # calc predicated value  of test set
+        predicted_normalized = self.trained_model.predict(test_y_normalized)
+        # denormalize so we can plot it
+        predicted = self.cooktime_scaler.inverse_transform([[item] for item in predicted_normalized])
+        predicted = [item[0] for item in predicted]
+
+        plt.plot(predicted, [item[0] for item in test_y], color='blue', linewidth=3)
+
+        plt.show()
+
+        
 
 def create_skill():
     return SoggyEggTimerSkill()
