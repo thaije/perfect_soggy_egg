@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
 
-data_path = os.environ.get('DATA_STORAGE_PATH')
+data_path = os.path.join(os.environ.get('DATA_STORAGE_PATH'), 'soggy_egg_timer')
 
 class SoggyEggTimerSkill(SkillBase):
     def __init__(self) -> None:
